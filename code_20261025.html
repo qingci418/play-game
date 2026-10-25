@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三角函数特殊弧度闯关竞赛</title>
+<style>
+*{box-sizing:border-box;font-family:system-ui}
+body{max-width:520px;margin:20px auto;padding:0 16px;background:#f5f9ff}
+.box{background:#fff;padding:24px;border-radius:16px;box-shadow:0 2px 12px #00000015}
+.question{font-size:24px;font-weight:bold;margin:20px 0;text-align:center;color:#222}
+.info{display:flex;justify-content:space-between;font-size:17px;color:#333;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.opt{display:block;width:100%;padding:14px;margin:10px 0;border:1px solid #cce;border-radius:10px;background:#f8fbff;font-size:18px;cursor:pointer}
+.opt:hover{background:#e8f2ff}
+.opt:disabled{cursor:not-allowed;opacity:0.6}
+#tip{height:26px;text-align:center;margin:12px;font-size:18px;font-weight:bold}
+.right{color:#00aa44}
+.wrong{color:#dd3333}
+.result-box{display:none;text-align:center;margin-top:16px;padding:16px;border:2px solid #4488ff;border-radius:12px;background:#f0f6ff}
+#startBtn{background:#2575e7;color:white;border:none}
+</style>
+</head>
+<body>
+<div class="box">
+<div class="info">
+<span>关卡：<span id="level">0</span>/10</span>
+<span>总计时：<span id="timer">00:00</span></span>
+<span>本题剩余：<span id="questionTimer">--</span>秒</span>
+<span>答对：<span id="correctCount">0</span></span>
+</div>
+<div class="question" id="q">点击下方按钮开始闯关</div>
+<div id="opts"></div>
+<div id="tip"></div>
+<button class="opt" id="startBtn" onclick="startGame()">开始闯关</button>
+<div class="result-box" id="result">
+<h3>🎉 闯关结束！</h3>
+<p>总用时：<span id="totalTime"></span></p>
+<p>答对题目：<span id="totalCorrect"></span>/10</p>
+<p>得分：<span id="finalScore"></span>分</p>
+<button class="opt" onclick="restartGame()">重新闯关</button>
+</div>
+</div>
+
+<script>
+// 题库 π/6，π/4，π/3，π/2
+const bank = [
+{q:"sin(π/6)",a:"1/2",opts:["1/2","√2/2","√3/2","1"]},
+{q:"sin(π/4)",a:"√2/2",opts:["1/2","√2/2","√3/2","1"]},
+{q:"sin(π/3)",a:"√3/2",opts:["1/2","√2/2","√3/2","1"]},
+{q:"sin(π/2)",a:"1",opts:["1/2","√2/2","√3/2","1"]},
+
+{q:"cos(π/6)",a:"√3/2",opts:["1/2","√2/2","√3/2","0"]},
+{q:"cos(π/4)",a:"√2/2",opts:["1/2","√2/2","√3/2","0"]},
+{q:"cos(π/3)",a:"1/2",opts:["1/2","√2/2","√3/2","0"]},
+{q:"cos(π/2)",a:"0",opts:["1/2","√2/2","√3/2","0"]},
+
+{q:"tan(π/6)",a:"√3/3",opts:["√3/3","1","√3","不存在"]},
+{q:"tan(π/4)",a:"1",opts:["√3/3","1","√3","不存在"]},
+{q:"tan(π/3)",a:"√3",opts:["√3/3","1","√3","不存在"]},
+{q:"tan(π/2)",a:"不存在",opts:["√3/3","1","√3","不存在"]},
+
+{q:"arcsin(1/2)",a:"π/6",opts:["π/6","π/4","π/3","π/2"]},
+{q:"arcsin(√2/2)",a:"π/4",opts:["π/6","π/4","π/3","π/2"]},
+{q:"arcsin(√3/2)",a:"π/3",opts:["π/6","π/4","π/3","π/2"]},
+{q:"arcsin(1)",a:"π/2",opts:["π/6","π/4","π/3","π/2"]},
+
+{q:"arccos(√3/2)",a:"π/6",opts:["π/6","π/4","π/3","π/2"]},
+{q:"arccos(√2/2)",a:"π/4",opts:["π/6","π/4","π/3","π/2"]},
+{q:"arccos(1/2)",a:"π/3",opts:["π/6","π/4","π/3","π/2"]},
+{q:"arccos(0)",a:"π/2",opts:["π/6","π/4","π/3","π/2"]},
+
+{q:"arctan(√3/3)",a:"π/6",opts:["π/6","π/4","π/3","π/2"]},
+{q:"arctan(1)",a:"π/4",opts:["π/6","π/4","π/3","π/2"]},
+{q:"arctan(√3)",a:"π/3",opts:["π/6","π/4","π/3","π/2"]}
+];
+
+// 全局变量
+let totalQuestion = 10;
+let currentLevel = 0;
+let correctCount = 0;
+let startTime = null;
+let timerInterval = null;
+let questionTimerInterval = null;
+let questionRemainTime = 0;
+let questionList = [];
+let nowQuestion = null;
+
+const qEl = document.getElementById('q');
+const optEl = document.getElementById('opts');
+const tipEl = document.getElementById('tip');
+const levelEl = document.getElementById('level');
+const timerEl = document.getElementById('timer');
+const questionTimerEl = document.getElementById('questionTimer');
+const correctEl = document.getElementById('correctCount');
+const startBtn = document.getElementById('startBtn');
+const resultBox = document.getElementById('result');
+const totalTimeEl = document.getElementById('totalTime');
+const totalCorrectEl = document.getElementById('totalCorrect');
+const finalScoreEl = document.getElementById('finalScore');
+
+// 开始游戏
+function startGame(){
+    // 重置状态
+    currentLevel = 0;
+    correctCount = 0;
+    resultBox.style.display = "none";
+    startBtn.style.display = "none";
+    tipEl.textContent = "";
+    // 随机抽取10道不重复题目
+    questionList = [...bank].sort(()=>Math.random()-0.5).slice(0,totalQuestion);
+    startTime = Date.now();
+    if(timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(updateTimer,1000);
+    nextQuestion();
+}
+
+// 更新总计时器
+function updateTimer(){
+    const diff = Math.floor((Date.now() - startTime)/1000);
+    const min = String(Math.floor(diff / 60)).padStart(2,'0');
+    const sec = String(diff % 60).padStart(2,'0');
+    timerEl.innerText = `${min}:${sec}`;
+}
+
+// 加载下一题
+function nextQuestion(){
+    //清除上一题的本题倒计时
+    if(questionTimerInterval) clearInterval(questionTimerInterval);
+
+    currentLevel++;
+    nowQuestion = questionList[currentLevel -1];
+    levelEl.innerText = currentLevel;
+    qEl.innerText = nowQuestion.q;
+    tipEl.textContent = "";
+    optEl.innerHTML = "";
+
+    // 设置本题限时：前五题8秒，后五题5秒
+    if(currentLevel <=5){
+        questionRemainTime = 8;
+    }else{
+        questionRemainTime = 5;
+    }
+    questionTimerEl.innerText = questionRemainTime;
+
+    //打乱四个选项
+    let optsArr = [...nowQuestion.opts];
+    for(let i=optsArr.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [optsArr[i],optsArr[j]] = [optsArr[j],optsArr[i]];
+    }
+    optsArr.forEach(item=>{
+        let btn = document.createElement('button');
+        btn.className = "opt";
+        btn.innerText = item;
+        btn.onclick = ()=>selectAnswer(item, btn);
+        optEl.appendChild(btn);
+    })
+
+    // 启动本题倒计时
+    questionTimerInterval = setInterval(()=>{
+        questionRemainTime--;
+        questionTimerEl.innerText = questionRemainTime;
+        if(questionRemainTime <=0){
+            clearInterval(questionTimerInterval);
+            timeOut();
+        }
+    },1000);
+}
+
+// 超时处理
+function timeOut(){
+    const buttons = optEl.querySelectorAll('.opt');
+    buttons.forEach(b=>b.disabled=true);
+    tipEl.className="wrong";
+    tipEl.innerText=`⏰ 超时！答案：${nowQuestion.a}`;
+    // 立刻下一题，取消延迟
+    if(currentLevel >= totalQuestion){
+        gameOver();
+    }else{
+        nextQuestion();
+    }
+}
+
+// 选择答案：选完立刻跳转，取消延时
+function selectAnswer(sel, btn){
+    if(questionTimerInterval) clearInterval(questionTimerInterval);
+    // 一次性选择，禁止重复点击
+    const buttons = optEl.querySelectorAll('.opt');
+    buttons.forEach(b=>b.disabled=true);
+    if(sel === nowQuestion.a){
+        tipEl.className="right";
+        tipEl.innerText="✅ 回答正确";
+        correctCount++;
+        correctEl.innerText = correctCount;
+    }else{
+        tipEl.className="wrong";
+        tipEl.innerText=`❌ 错误，答案：${nowQuestion.a}`;
+    }
+    //立刻跳转，无等待
+    if(currentLevel >= totalQuestion){
+        gameOver();
+    }else{
+        nextQuestion();
+    }
+}
+
+// 游戏结束结算
+function gameOver(){
+    clearInterval(timerInterval);
+    if(questionTimerInterval) clearInterval(questionTimerInterval);
+    const totalSeconds = Math.floor((Date.now() - startTime)/1000);
+    const min = String(Math.floor(totalSeconds / 60)).padStart(2,'0');
+    const sec = String(totalSeconds % 60).padStart(2,'0');
+    totalTimeEl.innerText = `${min}:${sec}`;
+    totalCorrectEl.innerText = correctCount;
+    finalScoreEl.innerText = correctCount * 10;
+    resultBox.style.display = "block";
+}
+
+// 重新开始
+function restartGame(){
+    if(timerInterval) clearInterval(timerInterval);
+    if(questionTimerInterval) clearInterval(questionTimerInterval);
+    startBtn.style.display="block";
+    qEl.innerText="点击下方按钮开始闯关";
+    optEl.innerHTML="";
+    tipEl.textContent="";
+    timerEl.innerText="00:00";
+    questionTimerEl.innerText="--";
+    levelEl.innerText="0";
+    correctEl.innerText="0";
+}
+</script>
+</body>
+</html>
